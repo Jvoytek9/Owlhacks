@@ -1,9 +1,7 @@
 import os
 from datetime import date
-import gspread
-from gspread_dataframe import get_as_dataframe
-from oauth2client.service_account import ServiceAccountCredentials
 import numpy as np
+import pandas as pd
 np.warnings.filterwarnings('ignore')
 import dash
 from dash.dependencies import Input, Output
@@ -13,18 +11,10 @@ import dash_bootstrap_components as dbc
 import dash_table as dt
 import plotly.graph_objs as go
 
-scope = ['https://spreadsheets.google.com/feeds',
-'https://www.googleapis.com/auth/drive']
-
-basedir = os.path.abspath(os.path.dirname(__file__))
-data_json = basedir+'/amazing-insight.json'
-
-creds = ServiceAccountCredentials.from_json_keyfile_name(data_json, scope)
-connection = gspread.authorize(creds)
-
-worksheet = connection.open("Surfactant_Database").sheet1
-dv = get_as_dataframe(worksheet)
+dv = pd.read_csv(r'C:\Users\Josh\Documents\Owlhacks\Scripts\all.csv')
 dv = dv.loc[:, ~dv.columns.str.contains('^Unnamed')]
+
+offenses = dv["bail_type"]
 
 app = dash.Dash(__name__, 
                 external_stylesheets=[dbc.themes.BOOTSTRAP], 
@@ -37,7 +27,7 @@ app = dash.Dash(__name__,
 ])
 server = app.server
 app.config.suppress_callback_exceptions = True
-app.title = "Foam Database"
+app.title = "Philadelphia Database"
 
 if 'DYNO' in os.environ:
     app_name = os.environ['DASH_APP_NAME']
@@ -57,7 +47,7 @@ dv.dropna(
 dv.fillna("None", inplace=True)
 
 dv['Color'] = "any" 
-names = list(dict.fromkeys(dv['Study']))
+names = list(dict.fromkeys(dv['bail_type']))
 color = [
     '#1f77b4',  # muted blue
     '#ff7f0e',  # safety orange
@@ -104,9 +94,9 @@ color = [
 ]
 color_index = 0
 for i in names:
-    dv.loc[dv.Study == i, 'Color'] = color[color_index]
+    dv.loc[dv.bail_type == i, 'Color'] = color[color_index]
     color_index += 1
-#print(dv[dv.Study == "Kruss 2019"]) #check for colors you do not like
+#print(dv[dv.bail_type == "Monetary"]) #check for colors you do not like
 
 app.layout = html.Div([
     dcc.Location(id='url', refresh=True),
@@ -120,15 +110,15 @@ home = dbc.Row([
             html.Div([
                 html.Div([html.H1("Graph 2")],style={'text-align':"center", "margin-left":"auto","margin-right":"auto", 'color':"white"}),
 
-                html.Div(dcc.Dropdown(id="select-xaxis2", placeholder = "Select x-axis", value = "Temperature (C)",
+                html.Div(dcc.Dropdown(id="select-xaxis2", placeholder = "Select x-axis", value = "bail_date",
                 options=[{'label': i.title(), 'value': i}  for i in dv.columns[7:]], clearable=False),
                 style={"margin-left": "auto", "margin-right": "auto", "width": "80%"}),
 
-                html.Div(dcc.Dropdown(id="select-yaxis2", placeholder = "Select y-axis", value = "Pressure (Psi)",
+                html.Div(dcc.Dropdown(id="select-yaxis2", placeholder = "Select y-axis", value = "offense_date",
                 options=[{'label': i.title(), 'value': i} for i in dv.columns[7:]], clearable=False),
                 style={"margin-left": "auto", "margin-right": "auto", "width": "80%"}),
 
-                html.Div(dcc.Dropdown(id="select-zaxis2", placeholder = "Select z-axis", value = "Halflife (Min)",
+                html.Div(dcc.Dropdown(id="select-zaxis2", placeholder = "Select z-axis", value = "arrest_date",
                 options=[{'label': i.title(), 'value': i} for i in dv.columns[7:]], clearable=False),
                 style={"margin-left": "auto", "margin-right": "auto", "width": "80%"})
             ],id="compare_dropdown"),
