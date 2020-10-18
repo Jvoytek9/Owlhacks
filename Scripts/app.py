@@ -1,6 +1,5 @@
 import os
 from datetime import date
-import datetime
 import numpy as np
 import pandas as pd
 import gspread
@@ -191,11 +190,11 @@ home = dbc.Row([
                 options=[{'label': i.title(), 'value': i}  for i in dv.columns[10:15]], clearable=False),
                 style={"margin-left": "auto", "margin-right": "auto", "width": "80%"}),
 
-                html.Div(dcc.Dropdown(id="select-yaxis2", placeholder = "Select y-axis", value = "bail_amount",
+                html.Div(dcc.Dropdown(id="select-yaxis2", placeholder = "Select y-axis", value = "arrests",
                 options=[{'label': i.title(), 'value': i} for i in dv.columns[15:-1]], clearable=False),
                 style={"margin-left": "auto", "margin-right": "auto", "width": "80%"}),
 
-                html.Div(dcc.Dropdown(id="select-zaxis2", placeholder = "Select z-axis", value = "arrest_date",
+                html.Div(dcc.Dropdown(id="select-zaxis2", placeholder = "Select z-axis", value = "zip",
                 options=[{'label': i.title(), 'value': i} for i in dv.columns[10:-1]], clearable=False),
                 style={"margin-left": "auto", "margin-right": "auto", "width": "80%"})
             ],id="compare_dropdown"),
@@ -208,11 +207,11 @@ home = dbc.Row([
                 options=[{'label': i.title(), 'value': i}  for i in dv.columns[10:15]], clearable=False),
                 style={"margin-left": "auto", "margin-right": "auto", "width": "80%"}),
 
-                html.Div(dcc.Dropdown(id="select-yaxis", placeholder = "Select y-axis", value = "bail_amount",
+                html.Div(dcc.Dropdown(id="select-yaxis", placeholder = "Select y-axis", value = "arrests",
                 options=[{'label': i.title(), 'value': i} for i in dv.columns[15:-1]], clearable=False),
                 style={"margin-left": "auto", "margin-right": "auto", "width": "80%"}),
 
-                html.Div(dcc.Dropdown(id="select-zaxis", placeholder = "Select z-axis", value = "arrest_date",
+                html.Div(dcc.Dropdown(id="select-zaxis", placeholder = "Select z-axis", value = "zip",
                 options=[{'label': i.title(), 'value': i} for i in dv.columns[10:-1]], clearable=False),
                 style={"margin-left": "auto", "margin-right": "auto", "width": "80%"}),
 
@@ -332,7 +331,7 @@ home = dbc.Row([
             ],style={'text-align':"center","margin-left": "auto", "margin-right": "auto", "width": "100%"}),
 
             dcc.Link('About', href='/about',style={'position':'absolute','top':0, 'left':0,"padding":5,"color":"white","font-size":18}),
-        ],style={'backgroundColor': '#0066CC'},width=2),
+        ],style={'backgroundColor': '#9E1B34'},width=2),
 
         dbc.Col([
                 dcc.Tabs(id="tabs", children=[
@@ -505,6 +504,8 @@ about = html.Div([
                                         html.Hr(),
                                         html.H6("Mechanical Engineering Student"),
                                         html.A("josh.voytek@temple.edu", href="mailto: josh.voytek@temple.edu"),
+                                        html.A("LinkedIn Profile", href="https://www.linkedin.com/in/josh-voytek/",
+                                        style={"display":"block"},target="_blank")
                                     ]
                                 ,style={"text-align":"center"})
                             ])
@@ -519,11 +520,13 @@ about = html.Div([
                                         html.Hr(),
                                         html.H6("Bioinformatics Student"),
                                         html.A("maria.maltepes@temple.edu", href="mailto: maria.maltepes@temple.edu"),
+                                        html.A("LinkedIn Profile", href="https://www.linkedin.com/in/maria-m-07a884109/",
+                                        style={"display":"block"},target="_blank")
                                     ]
                                 ,style={"text-align":"center"})
                             ])
                         ),
-                    ],style={"margin-left":"auto","margin-right":"auto","width":"80%"},no_gutters=True),
+                    ],style={"margin-left":"auto","margin-right":"auto","width":"60%"},no_gutters=True),
                     html.Br(),
                     html.P("Currently juniors planning on a future in software development or analytics."
                     ,style={"font-size":23,"padding-left":30,"padding-right":30,"text-align":"center"})         
@@ -534,27 +537,30 @@ about = html.Div([
                     html.Br(),
                     html.Div([
 
-                        html.P("This project is supported by the Geothermal Technology Office of the Department of Energy and the Oak Ridge National Laboratory.",
+                        html.P("Firstly, we would like to say thank you to Owlhacks and the Philly Bail Project for giving us the opportunity to create something meaningful.",
                         style={"font-size":23,"padding-left":30,"padding-right":30}),
 
-                        html.P("Hydraulic fracturing is the process of fracturing rock formations with high-pressure water-based fluids. In Enhanced Geothermal " +
-                           "Systems (EGS) hydraulic fracturing is carried out by injecting high-pressure fluids into the Hot Dry Rocks (HDR) under carefully " +
-                           "controlled conditions. The fluid used for fracturing is an important component for EGS, not only concerning the technical approch but " +
-                           "also environmental impact. Recent research has been carried out to develop waterless fracturing technologies for EGS, including foambased hydrofracking, " +
+                        html.P("The purpose of this project was to create a data visualization tool that makes the analysis of large data easier. " +
+                           "The tool takes in data, and utilizes an array of sorting algorithms both manually implemented and included in vanilla Plotly. " +
+                           "The tool was repurposed from an existing research project of Josh's, which analyzed multivariate Surfactant Literature, specifically for applications in " +
+                           "waterless geothermal fracking. When we reviewed the Philadelphia Bail Project's data, we figured this tool would be perfect to provide a meaningful analysis. " +
+                           "Our hope is that this project will be used as a method of understanding the way our criminal justice system works in Philadelphia. " + 
+                           "Meaningful connections can be drawn from unlikely places, and a tool like this can be used to catalyze such connections. " + 
+                           "Recent research has been carried out to develop waterless fracturing technologies for EGS, including foambased hydrofracking, " +
                            "where foams are mixtures of gas and liquid fluids. Foam fracturing fluids have potential benefits over water-based " +
                            "fluids because of less water consumption, less damage in water sensitive formations, and less liquid to recover and handle after " +
                            "fracturing process. One challenge for implementing foam fracturing in EGS is to achieve stable foams at high temperatures, as the foam " +
                            "stability tends to decay with increase in temperature. The intent of this project is to compile and neatly display modern literature data on foambased hydrofracking for EGS.",
                             style={"font-size":23,"padding-left":50,"padding-right":50}
                         )
-                        
+
                     ],style={"text-align":"center"}),
                     html.P("Last Updated: " + today,style={"text-align":"center"})
                 ]),
             ]),
         ],style={"backgroundColor":"white"}),
-        dbc.Col(style={'backgroundColor': '#0066CC',"height":"100vh"},width=3)
-    ],style={'backgroundColor': '#0066CC',"height":"100%"},no_gutters=True)
+        dbc.Col(style={'backgroundColor': '#9E1B34',"height":"100vh"},width=3)
+    ],style={'backgroundColor': '#9E1B34',"height":"100%"},no_gutters=True)
 ])
 
 @app.callback(dash.dependencies.Output('page-content', 'children'),
@@ -877,7 +883,6 @@ def update_comp2_2D_table(selected_x, selected_y, comp, ga, sur, surc, add, addc
         cleaned.to_dict('records'), [{'id': c, 'name': c} for c in cleaned.columns]
     )
 
-
 @app.callback(
     Output("comp1_3D_graph", "figure"),
     [Input("select-xaxis", "value"),
@@ -919,7 +924,6 @@ def update_comp1_3D_graph(selected_x, selected_y, selected_z, comp, ga, sur, sur
             name=i)
 
         data.append(trace)
-
         
     if(comp == "No Compare"):
         legend_orientation={
