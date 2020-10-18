@@ -1,7 +1,6 @@
 import os
 from datetime import date
 import numpy as np
-import pandas as pd
 import gspread
 from gspread_dataframe import get_as_dataframe
 from oauth2client.service_account import ServiceAccountCredentials
@@ -168,6 +167,14 @@ app.layout = html.Div([
     dcc.Location(id='url', refresh=True),
     html.Div(id='page-content'),
 ])
+
+zipsCounter = {}
+
+for zips in dv.zip:
+    if zips not in zipsCounter:
+        zipsCounter[zips] = 1
+    else:
+        zipsCounter[zips] += 1
 
 Graph_Height = 610
 
@@ -545,12 +552,7 @@ about = html.Div([
                            "The tool was repurposed from an existing research project of Josh's, which analyzed multivariate Surfactant Literature, specifically for applications in " +
                            "waterless geothermal fracking. When we reviewed the Philadelphia Bail Project's data, we figured this tool would be perfect to provide a meaningful analysis. " +
                            "Our hope is that this project will be used as a method of understanding the way our criminal justice system works in Philadelphia. " + 
-                           "Meaningful connections can be drawn from unlikely places, and a tool like this can be used to catalyze such connections. " + 
-                           "Recent research has been carried out to develop waterless fracturing technologies for EGS, including foambased hydrofracking, " +
-                           "where foams are mixtures of gas and liquid fluids. Foam fracturing fluids have potential benefits over water-based " +
-                           "fluids because of less water consumption, less damage in water sensitive formations, and less liquid to recover and handle after " +
-                           "fracturing process. One challenge for implementing foam fracturing in EGS is to achieve stable foams at high temperatures, as the foam " +
-                           "stability tends to decay with increase in temperature. The intent of this project is to compile and neatly display modern literature data on foambased hydrofracking for EGS.",
+                           "Meaningful connections can be drawn from unlikely places, and a tool like this can be used to catalyze such connections.",
                             style={"font-size":23,"padding-left":50,"padding-right":50}
                         )
 
