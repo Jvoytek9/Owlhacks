@@ -1,7 +1,11 @@
 import os
 from datetime import date
+import datetime
 import numpy as np
 import pandas as pd
+import gspread
+from gspread_dataframe import get_as_dataframe
+from oauth2client.service_account import ServiceAccountCredentials
 np.warnings.filterwarnings('ignore')
 import dash
 from dash.dependencies import Input, Output
@@ -11,10 +15,18 @@ import dash_bootstrap_components as dbc
 import dash_table as dt
 import plotly.graph_objs as go
 
-dv = pd.read_csv(r'C:\Users\Josh\Documents\Owlhacks\Scripts\all.csv')
-dv = dv.loc[:, ~dv.columns.str.contains('^Unnamed')]
+scope = ['https://spreadsheets.google.com/feeds',
+'https://www.googleapis.com/auth/drive']
 
-offenses = dv["bail_type"]
+basedir = os.path.abspath(os.path.dirname(__file__))
+data_json = basedir+'/amazing-insight.json'
+
+creds = ServiceAccountCredentials.from_json_keyfile_name(data_json, scope)
+connection = gspread.authorize(creds)
+
+worksheet = connection.open("Owlhacks").sheet1
+dv = get_as_dataframe(worksheet)
+dv = dv.loc[:, ~dv.columns.str.contains('^Unnamed')]
 
 app = dash.Dash(__name__, 
                 external_stylesheets=[dbc.themes.BOOTSTRAP], 
@@ -37,6 +49,48 @@ else:
 today = date.today()
 today = today.strftime("%m/%d/%Y")
 
+ageRange = []
+for age in dv["age"]:
+    if age <= 20:
+        age = int(age)
+        ageRange.append("18-20")
+    elif age > 20 and age <= 30:
+        age = int(age)
+        ageRange.append("21-30")
+    elif age > 30 and age <= 40:
+        age = int(age)
+        ageRange.append("31-40")
+    elif age > 40 and age <= 50:
+        age = int(age)
+        ageRange.append("41-50")
+    elif age > 50:
+        age = int(age)
+        ageRange.append("50+")
+    else:
+        ageRange.append("None")    
+dv["age"] = ageRange
+
+timeRange = []
+for time in dv['prelim_hearing_time']:
+    if time >= 0 and time < 5:
+        time = int(time)
+        timeRange.append("0-4")
+    elif time >= 5 and time < 10:
+        time = int(time)
+        timeRange.append("5-9")
+    elif time >= 10 and time < 15:
+        time = int(time)
+        timeRange.append("10-14")
+    elif time >= 15 and time < 20:
+        time = int(time)
+        timeRange.append("15-19")
+    elif time >= 20 and time <= 24:
+        time = int(time)
+        timeRange.append("20-24")
+    else:
+        timeRange.append("None")
+dv['prelim_hearing_time'] = timeRange
+
 dv.dropna(
     axis=0,
     how='all',
@@ -45,6 +99,19 @@ dv.dropna(
     inplace=True
 )
 dv.fillna("None", inplace=True)
+
+officerCount = {}
+
+for officer in dv["arresting_officer"]:
+    if officer not in officerCount:
+        officerCount[officer] = 1
+    else:
+        officerCount[officer] += 1
+
+dv['arrests'] = "any" 
+off = list(dict.fromkeys(dv['arresting_officer']))
+for i in off:
+    dv.loc[dv.arresting_officer == i, 'arrests'] = officerCount[i]
 
 dv['Color'] = "any" 
 names = list(dict.fromkeys(dv['bail_type']))
@@ -105,38 +172,48 @@ app.layout = html.Div([
 
 Graph_Height = 610
 
+dv['docket_no'] = dv['docket_no'].astype(str)
+dv['age'] = dv['age'].astype(str)
+dv['offenses'] = dv['offenses'].astype(str)
+dv['case_status'] = dv['case_status'].astype(str)
+dv['arresting_officer'] = dv['arresting_officer'].astype(str)
+dv['arrests'] = dv['arrests'].astype(str)
+dv['docket_no'] = dv['docket_no'].astype(str)
+dv['attorney'] = dv['attorney'].astype(str)
+dv['bail_set_by'] = dv['bail_set_by'].astype(str)
+
 home = dbc.Row([
         dbc.Col([
             html.Div([
                 html.Div([html.H1("Graph 2")],style={'text-align':"center", "margin-left":"auto","margin-right":"auto", 'color':"white"}),
 
-                html.Div(dcc.Dropdown(id="select-xaxis2", placeholder = "Select x-axis", value = "bail_date",
-                options=[{'label': i.title(), 'value': i}  for i in dv.columns[7:]], clearable=False),
+                html.Div(dcc.Dropdown(id="select-xaxis2", placeholder = "Select x-axis", value = "arrest_date",
+                options=[{'label': i.title(), 'value': i}  for i in dv.columns[10:15]], clearable=False),
                 style={"margin-left": "auto", "margin-right": "auto", "width": "80%"}),
 
-                html.Div(dcc.Dropdown(id="select-yaxis2", placeholder = "Select y-axis", value = "offense_date",
-                options=[{'label': i.title(), 'value': i} for i in dv.columns[7:]], clearable=False),
+                html.Div(dcc.Dropdown(id="select-yaxis2", placeholder = "Select y-axis", value = "bail_amount",
+                options=[{'label': i.title(), 'value': i} for i in dv.columns[15:-1]], clearable=False),
                 style={"margin-left": "auto", "margin-right": "auto", "width": "80%"}),
 
                 html.Div(dcc.Dropdown(id="select-zaxis2", placeholder = "Select z-axis", value = "arrest_date",
-                options=[{'label': i.title(), 'value': i} for i in dv.columns[7:]], clearable=False),
+                options=[{'label': i.title(), 'value': i} for i in dv.columns[10:-1]], clearable=False),
                 style={"margin-left": "auto", "margin-right": "auto", "width": "80%"})
             ],id="compare_dropdown"),
 
-            html.Div([html.H1("Foam Database")],
+            html.Div([html.H1("Philly Database")],
                 style={'text-align':"center", "margin-right":"auto","margin-left":"auto", 'color':"white","width": "80%","padding-top":"10%"}),
 
             html.Div([
-                html.Div(dcc.Dropdown(id="select-xaxis", placeholder = "Select x-axis", value = "Temperature (C)",
-                options=[{'label': i.title(), 'value': i}  for i in dv.columns[7:]], clearable=False),
+                html.Div(dcc.Dropdown(id="select-xaxis", placeholder = "Select x-axis", value = "arrest_date",
+                options=[{'label': i.title(), 'value': i}  for i in dv.columns[10:15]], clearable=False),
                 style={"margin-left": "auto", "margin-right": "auto", "width": "80%"}),
 
-                html.Div(dcc.Dropdown(id="select-yaxis", placeholder = "Select y-axis", value = "Pressure (Psi)",
-                options=[{'label': i.title(), 'value': i} for i in dv.columns[7:]], clearable=False),
+                html.Div(dcc.Dropdown(id="select-yaxis", placeholder = "Select y-axis", value = "bail_amount",
+                options=[{'label': i.title(), 'value': i} for i in dv.columns[15:-1]], clearable=False),
                 style={"margin-left": "auto", "margin-right": "auto", "width": "80%"}),
 
-                html.Div(dcc.Dropdown(id="select-zaxis", placeholder = "Select z-axis", value = "Halflife (Min)",
-                options=[{'label': i.title(), 'value': i} for i in dv.columns[7:]], clearable=False),
+                html.Div(dcc.Dropdown(id="select-zaxis", placeholder = "Select z-axis", value = "arrest_date",
+                options=[{'label': i.title(), 'value': i} for i in dv.columns[10:-1]], clearable=False),
                 style={"margin-left": "auto", "margin-right": "auto", "width": "80%"}),
 
                 html.Div([
@@ -153,33 +230,24 @@ home = dbc.Row([
                     html.Div(id='controls-container', children=[
                                             
                         html.Hr(),
-                        
-                        html.Div(
-                            dcc.Checklist(
-                                id = 'bestfit',
-                                options= [{'label': i, 'value': i} for i in ['Scatter','Best-Fit']],
-                                value = ['Scatter'],
-                                labelStyle={"padding-right":"10px","margin":"auto"}
-                            )
-                        ,style={"margin":"auto"}),
                                                     
                         html.Div(
                             dcc.RadioItems(
                                 id='addComp',
                                 options=[{'label': i, 'value': i} for i in ['No Compare','Compare']],
                                 value='No Compare',
-                                labelStyle={"padding-right":"10px","margin":"auto","padding-top":"10px"}
+                                labelStyle={"padding-right":"10px","margin":"auto"}
                             )
                         ,style={"margin":"auto"}),
 
                     html.Hr(),
                                             
                     html.Details([
-                        html.Summary("Gasses"),
+                        html.Summary("Docket Number"),
                         dcc.Checklist(
                             id = 'gasses',
-                            options= [{'label': gas, 'value': gas} for gas in list(dict.fromkeys(dv['Gas']))],
-                            value = list(dict.fromkeys(dv['Gas'])),
+                            options= [{'label': number, 'value': number} for number in sorted(list(dict.fromkeys(dv['docket_no'])))],
+                            value = list(dict.fromkeys(dv['docket_no'])),
                             labelStyle={'display': 'block'}
                         ),
                    ]),
@@ -187,11 +255,11 @@ home = dbc.Row([
                     html.Hr(),
 
                     html.Details([
-                        html.Summary("Surfactants"),
+                        html.Summary("Status"),
                         dcc.Checklist(
                             id = 'surfactants',
-                            options= [{'label': surfactant, 'value': surfactant} for surfactant in list(dict.fromkeys(dv['Surfactant']))],
-                            value = list(dict.fromkeys(dv['Surfactant'])),
+                            options= [{'label': status, 'value': status} for status in list(dict.fromkeys(dv['case_status']))],
+                            value = list(dict.fromkeys(dv['case_status'])),
                             labelStyle={'display': 'block'}
                         ),
                     ]),
@@ -199,11 +267,11 @@ home = dbc.Row([
                     html.Hr(),
 
                     html.Details([
-                        html.Summary("Surfactant Concentrations"),
+                        html.Summary("Arresting Officer"),
                         dcc.Checklist(
                             id = 'sconc',
-                            options= [{'label': sc, 'value': sc} for sc in list(dict.fromkeys(dv['Surfactant Concentration']))],
-                            value = list(dict.fromkeys(dv['Surfactant Concentration'])),
+                            options= [{'label': off, 'value': off} for off in sorted(list(dict.fromkeys(dv['arresting_officer'])))],
+                            value = list(dict.fromkeys(dv['arresting_officer'])),
                             labelStyle={'display': 'block'}
                         ),
                     ]),
@@ -211,11 +279,11 @@ home = dbc.Row([
                     html.Hr(),
 
                     html.Details([
-                        html.Summary("Additives"),
+                        html.Summary("Attorney"),
                         dcc.Checklist(
                             id = 'additives',
-                            options= [{'label': ad, 'value': ad} for ad in list(dict.fromkeys(dv['Additive']))],
-                            value = list(dict.fromkeys(dv['Additive'])),
+                            options= [{'label': ad, 'value': ad} for ad in sorted(list(dict.fromkeys(dv['attorney'])))],
+                            value = list(dict.fromkeys(dv['attorney'])),
                             labelStyle={'display': 'block'}
                         ),
                     ]),
@@ -223,11 +291,11 @@ home = dbc.Row([
                     html.Hr(),
 
                     html.Details([
-                        html.Summary("Additive Concentrations"),
+                        html.Summary("Age Range"),
                         dcc.Checklist(
                             id = 'aconc',
-                            options= [{'label': adc, 'value': adc} for adc in list(dict.fromkeys(dv['Additive Concentration']))],
-                            value = list(dict.fromkeys(dv['Additive Concentration'])),
+                            options= [{'label': age, 'value': age} for age in sorted(list(dict.fromkeys(dv['age'])))],
+                            value = list(dict.fromkeys(dv['age'])),
                             labelStyle={'display': 'block'}
                         ),
                     ]),
@@ -235,11 +303,23 @@ home = dbc.Row([
                     html.Hr(),
 
                     html.Details([
-                        html.Summary("Liquid Phase"),
+                        html.Summary("Bail Set By"),
                         dcc.Checklist(
                             id = 'lp',
-                            options= [{'label': li, 'value': li} for li in list(dict.fromkeys(dv['LiquidPhase']))],
-                            value = list(dict.fromkeys(dv['LiquidPhase'])),
+                            options= [{'label': bail, 'value': bail} for bail in sorted(list(dict.fromkeys(dv['bail_set_by'])))],
+                            value = list(dict.fromkeys(dv['bail_set_by'])),
+                            labelStyle={'display': 'block'}
+                        ),
+                    ]),
+                                            
+                    html.Hr(),
+
+                    html.Details([
+                        html.Summary("Prelimary Hearing Time"),
+                        dcc.Checklist(
+                            id = 'pht',
+                            options= [{'label': hear, 'value': hear} for hear in sorted((list(dict.fromkeys(dv['prelim_hearing_time']))))],
+                            value = list(dict.fromkeys(dv['prelim_hearing_time'])),
                             labelStyle={'display': 'block'}
                         ),
                     ]),
@@ -302,7 +382,7 @@ home = dbc.Row([
                                     id='comp2_3D_table',
                                     page_current=0,
                                     page_size=75,
-                                    columns=[{'id': c, 'name': c} for c in dv.columns[7:]],
+                                    columns=[{'id': c, 'name': c} for c in dv.columns[10:-1]],
                                     export_format='xlsx',
                                     style_data_conditional=[
                                     {
@@ -368,7 +448,7 @@ home = dbc.Row([
                                     id='comp2_2D_table',
                                     page_current=0,
                                     page_size=75,
-                                    columns=[{'id': c, 'name': c} for c in dv.columns[7:]],
+                                    columns=[{'id': c, 'name': c} for c in dv.columns[10:-1]],
                                     export_format='xlsx',
                                     style_data_conditional=[
                                     {
@@ -418,13 +498,13 @@ about = html.Div([
                     dbc.Row([
                         dbc.Col(
                             dbc.Card([
-                                dbc.CardImg(src="/assets/Ren.PNG", top=True,style={"height":"25vh","width":"100%"}),
+                                dbc.CardImg(src="/assets/Voytek.jpg", top=True,style={"height":"25vh","width":"100%"}),
                                 dbc.CardBody(
                                     [
-                                        html.H5("Fei Ren", className="card-title"),
+                                        html.H5("Josh Voytek", className="card-title"),
                                         html.Hr(),
-                                        html.H6("Associate Professor"),
-                                        html.A("renfei@temple.edu", href="mailto: renfei@temple.edu"),
+                                        html.H6("Mechanical Engineering Student"),
+                                        html.A("josh.voytek@temple.edu", href="mailto: josh.voytek@temple.edu"),
                                     ]
                                 ,style={"text-align":"center"})
                             ])
@@ -432,33 +512,20 @@ about = html.Div([
                             
                         dbc.Col(
                             dbc.Card([
-                                dbc.CardImg(src="/assets/Thakore.PNG", top=True,style={"height":"25vh","width":"100%"}),
+                                dbc.CardImg(src="/assets/Maltepes.JPG", top=True,style={"height":"25vh","width":"100%"}),
                                 dbc.CardBody(
                                     [
-                                        html.H5("Virensinh Thakore", className="card-title"),
+                                        html.H5("Maria Maltepes", className="card-title"),
                                         html.Hr(),
-                                        html.H6("Ph.D Candidate"),
-                                        html.A("thakorev@temple.edu", href="mailto: thakorev@temple.edu"),
-                                    ]
-                                ,style={"text-align":"center"})
-                            ])
-                        ),
-                        dbc.Col(
-                            dbc.Card([
-                                dbc.CardImg(src="/assets/Voytek.jpg", top=True,style={"height":"25vh","width":"100%"}),
-                                dbc.CardBody(
-                                    [
-                                        html.H5("Josh Voytek", className="card-title"),
-                                        html.Hr(),
-                                        html.H6("Web Developer"),
-                                        html.A("josh.voytek@temple.edu", href="mailto: josh.voytek@temple.edu"),
+                                        html.H6("Bioinformatics Student"),
+                                        html.A("maria.maltepes@temple.edu", href="mailto: maria.maltepes@temple.edu"),
                                     ]
                                 ,style={"text-align":"center"})
                             ])
                         ),
                     ],style={"margin-left":"auto","margin-right":"auto","width":"80%"},no_gutters=True),
                     html.Br(),
-                    html.P("Email Virensinh or Josh from above with related research data not currently being displayed."
+                    html.P("Currently juniors planning on a future in software development or analytics."
                     ,style={"font-size":23,"padding-left":30,"padding-right":30,"text-align":"center"})         
                 ]),
                 dcc.Tab(label='About The Project', children=[
@@ -538,15 +605,17 @@ def toggle_compare_container(compare_value):
      Input('sconc', 'value'),
      Input('additives', 'value'),
      Input('aconc', 'value'),
-     Input('lp', 'value')],
+     Input('lp', 'value'),
+     Input('pht', 'value')],
 )
-def update_table(ga, sur, surc, add, addc, lp):
-    cl = dv[dv['Gas'].isin(ga)]
-    ea = cl[cl['Surfactant'].isin(sur)]
-    n = ea[ea["Surfactant Concentration"].isin(surc)]
-    e = n[n['Additive'].isin(add)]
-    d = e[e['Additive Concentration'].isin(addc)]
-    cleaned = d[d['LiquidPhase'].isin(lp)]
+def update_table(ga, sur, surc, add, addc, lp, pht):
+    cl = dv[dv['docket_no'].isin(ga)]
+    ea = cl[cl['case_status'].isin(sur)]
+    n = ea[ea["arresting_officer"].isin(surc)]
+    e = n[n['attorney'].isin(add)]
+    d = e[e['age'].isin(addc)]
+    f = d[d['bail_set_by'].isin(lp)]
+    cleaned = f[f['prelim_hearing_time'].isin(pht)]
 
     return (
         cleaned.to_dict('records'), [{'id': c, 'name': c} for c in cleaned.columns[:]],
@@ -585,78 +654,42 @@ def update_styles(x,y,z):
     [Input("select-xaxis", "value"),
      Input("select-yaxis", "value"),
      Input('addComp', 'value'),
-     Input("bestfit", "value"),
      Input('gasses', 'value'),
      Input('surfactants', 'value'),
      Input('sconc', 'value'),
      Input('additives', 'value'),
      Input('aconc', 'value'),
-     Input('lp', 'value')],
+     Input('lp', 'value'),
+     Input('pht', 'value')],
 )
-def update_comp1_2D_graph(selected_x, selected_y, comp, fit, ga, sur, surc, add, addc, lp):
-    check = 0
-    cl = dv[dv['Gas'].isin(ga)]
-    ea = cl[cl['Surfactant'].isin(sur)]
-    n = ea[ea["Surfactant Concentration"].isin(surc)]
-    e = n[n['Additive'].isin(add)]
-    d = e[e['Additive Concentration'].isin(addc)]
-    cleaned = d[d['LiquidPhase'].isin(lp)]
+def update_comp1_2D_graph(selected_x, selected_y, comp, ga, sur, surc, add, addc, lp, pht):
+    cl = dv[dv['docket_no'].isin(ga)]
+    ea = cl[cl['case_status'].isin(sur)]
+    n = ea[ea["arresting_officer"].isin(surc)]
+    e = n[n['attorney'].isin(add)]
+    d = e[e['age'].isin(addc)]
+    f = d[d['bail_set_by'].isin(lp)]
+    cleaned = f[f['prelim_hearing_time'].isin(pht)]
 
     data = []
     legend_orientation = {}
 
     for i in names:
-        check = 0
-        name_array = cleaned[cleaned.Study == i]
-        for x in name_array[selected_x]:
-            if x == "None":
-                check = 1 
-                break
-        if check == 1:
-            continue
-        for x in name_array[selected_y]:
-            if x == "None":
-                check = 1 
-                break
-        if check == 1:
-            continue
-
-        if len(name_array.Color.values) == 0:
-            group_value = "none"
-        else:
-            group_value = str(name_array.Study.values[0])
-
-        if('Scatter' in fit):
-            trace = go.Scatter(x=name_array[selected_x],y=name_array[selected_y], 
-            hovertext= "Study: " + name_array.Study 
-            + "<br />Gas: " + name_array.Gas 
-            + "<br />Surfactant: " + name_array.Surfactant 
-            + "<br />Concentration Surfactant: " + name_array["Surfactant Concentration"] 
-            + "<br />Additive: " + name_array.Additive 
-            + "<br />Concentration Additive: " + name_array['Additive Concentration'] 
-            + "<br />Liquid Phase: " + name_array.LiquidPhase,
+        name_array = cleaned[cleaned.bail_type == i]
+        
+        trace = go.Scattergl(x=name_array[selected_x],y=name_array[selected_y], 
+            hovertext= "Docket Number: " + name_array.docket_no
+            + "<br />Case Status: " + name_array.case_status
+            + "<br />Offenses: " + name_array.offenses
+            + "<br />Arresting Officer: " + name_array.arresting_officer + " (arrests: " + dv["arrests"] + ")"
+            + "<br />Attorney: " + name_array.attorney
+            + "<br />Age: " + name_array["age"] 
+            + "<br />Bail Set By: " + name_array.bail_set_by 
+            + "<br />Preliminary Hearing Time: " + name_array.prelim_hearing_time,
             hoverinfo='text',mode='markers', marker={'size': 10, 'opacity': 0.8, 'color' : name_array.Color},
-            name=i,legendgroup=group_value)
+            name=i)
 
-            data.append(trace)
-        if('Best-Fit' in fit):
-            if len(name_array[selected_x].values) != 0 and len(name_array[selected_y].values) != 0: 
-                m, b = np.polyfit(name_array[selected_x].values.astype(float),name_array[selected_y].values.astype(float), 1)
-                correlation_matrix = np.corrcoef(name_array[selected_x].values.astype(float), name_array[selected_y].values.astype(float))
-                correlation_xy = correlation_matrix[0,1]
-                r_squared = correlation_xy**2
-
-                trace = go.Scatter(x = name_array[selected_x], y = m*name_array[selected_x].values+b,
-                hovertext= "Study: " + name_array.Study 
-                + "<br />Slope: " + str(round(m,2)) 
-                + "<br />Intercept: " + str(round(b,2)) 
-                + "<br />R Squared: " + str(round(r_squared,2)),
-                hoverinfo='text',mode='lines', line={'color' : name_array.Color.values[0]}, 
-                name=i,legendgroup=group_value)
-                
-                data.append(trace)
-            else:
-                continue
+        data.append(trace)
 
     if(comp == "No Compare"):
         legend_orientation={
@@ -673,6 +706,11 @@ def update_comp1_2D_graph(selected_x, selected_y, comp, fit, ga, sur, surc, add,
                 "font_size": 20,
         }
 
+    if selected_x == "zip":
+        typecat = "category"
+    else:
+        typecat = "-"
+
     return {
         'data': data,
         'layout': go.Layout(
@@ -682,6 +720,7 @@ def update_comp1_2D_graph(selected_x, selected_y, comp, fit, ga, sur, surc, add,
                 "tickfont_size":18,
             },
             xaxis={
+                "type":typecat,
                 "title":selected_x,
                 "titlefont_size":20,
                 "tickfont_size":18
@@ -705,18 +744,17 @@ def update_comp1_2D_graph(selected_x, selected_y, comp, fit, ga, sur, surc, add,
      Input('sconc', 'value'),
      Input('additives', 'value'),
      Input('aconc', 'value'),
-     Input('lp', 'value')],
+     Input('lp', 'value'),
+     Input('pht', 'value')],
 )
-def update_comp1_2D_table(selected_x, selected_y, ga, sur, surc, add, addc, lp):
-    cl = dv[dv['Gas'].isin(ga)]
-    ea = cl[cl['Surfactant'].isin(sur)]
-    n = ea[ea["Surfactant Concentration"].isin(surc)]
-    e = n[n['Additive'].isin(add)]
-    d = e[e['Additive Concentration'].isin(addc)]
-    cleaned = d[d['LiquidPhase'].isin(lp)]
-
-    cleaned = cleaned[cleaned[selected_x] != "None"]
-    cleaned = cleaned[cleaned[selected_y] != "None"]
+def update_comp1_2D_table(selected_x, selected_y, ga, sur, surc, add, addc, lp, pht):
+    cl = dv[dv['docket_no'].isin(ga)]
+    ea = cl[cl['case_status'].isin(sur)]
+    n = ea[ea["arresting_officer"].isin(surc)]
+    e = n[n['attorney'].isin(add)]
+    d = e[e['age'].isin(addc)]
+    f = d[d['bail_set_by'].isin(lp)]
+    cleaned = f[f['prelim_hearing_time'].isin(pht)]
 
     final = cleaned.columns
     final = final.drop([selected_x,selected_y])
@@ -731,82 +769,49 @@ def update_comp1_2D_table(selected_x, selected_y, ga, sur, surc, add, addc, lp):
     [Input("select-xaxis2", "value"),
      Input("select-yaxis2", "value"),
      Input('addComp', 'value'),
-     Input("bestfit", "value"),
      Input('gasses', 'value'),
      Input('surfactants', 'value'),
      Input('sconc', 'value'),
      Input('additives', 'value'),
      Input('aconc', 'value'),
-     Input('lp', 'value')],
+     Input('lp', 'value'),
+     Input('pht', 'value')],
 )
-def update_comp2_2D_graph(selected_x, selected_y, comp, fit, ga, sur, surc, add, addc, lp):
+def update_comp2_2D_graph(selected_x, selected_y, comp, ga, sur, surc, add, addc, lp, pht):
     if comp == "No Compare":
         return "none"
 
-    check = 0
-    cl = dv[dv['Gas'].isin(ga)]
-    ea = cl[cl['Surfactant'].isin(sur)]
-    n = ea[ea["Surfactant Concentration"].isin(surc)]
-    e = n[n['Additive'].isin(add)]
-    d = e[e['Additive Concentration'].isin(addc)]
-    cleaned = d[d['LiquidPhase'].isin(lp)]
+    cl = dv[dv['docket_no'].isin(ga)]
+    ea = cl[cl['case_status'].isin(sur)]
+    n = ea[ea["arresting_officer"].isin(surc)]
+    e = n[n['attorney'].isin(add)]
+    d = e[e['age'].isin(addc)]
+    f = d[d['bail_set_by'].isin(lp)]
+    cleaned = f[f['prelim_hearing_time'].isin(pht)]
 
     data = []
 
     for i in names:
-        check = 0
-        name_array = cleaned[cleaned.Study == i]
-        for x in name_array[selected_x]:
-            if x == "None":
-                check = 1 
-                break
-        if check == 1:
-            continue
-        for x in name_array[selected_y]:
-            if x == "None":
-                check = 1 
-                break
-        if check == 1:
-            continue
+        name_array = cleaned[cleaned.bail_type == i]
 
-        if len(name_array.Color.values) == 0:
-            group_value = "none"
-        else:
-            group_value = str(name_array.Study.values[0])
-
-        if('Scatter' in fit):
-            trace = go.Scatter(x=name_array[selected_x],y=name_array[selected_y], 
-            hovertext= "Study: " + name_array.Study 
-            + "<br />Gas: " + name_array.Gas 
-            + "<br />Surfactant: " + name_array.Surfactant 
-            + "<br />Concentration Surfactant: " + name_array["Surfactant Concentration"] 
-            + "<br />Additive: " + name_array.Additive 
-            + "<br />Concentration Additive: " + name_array['Additive Concentration'] 
-            + "<br />Liquid Phase: " + name_array.LiquidPhase,
+        trace = go.Scattergl(x=name_array[selected_x],y=name_array[selected_y], 
+            hovertext= "Docket Number: " + name_array.docket_no
+            + "<br />Case Status: " + name_array.case_status
+            + "<br />Offenses: " + name_array.offenses
+            + "<br />Arresting Officer: " + name_array.arresting_officer + " (arrests: " + dv["arrests"] + ")"
+            + "<br />Attorney: " + name_array.attorney
+            + "<br />Age: " + name_array["age"] 
+            + "<br />Bail Set By: " + name_array.bail_set_by 
+            + "<br />Preliminary Hearing Time: " + name_array.prelim_hearing_time,
             hoverinfo='text',mode='markers', marker={'size': 10, 'opacity': 0.8, 'color' : name_array.Color},
-            name=i,legendgroup=group_value)
+            name=i)
 
-            data.append(trace)
-
-        if('Best-Fit' in fit):
-            if len(name_array[selected_x].values) != 0 and len(name_array[selected_y].values) != 0: 
-                m, b = np.polyfit(name_array[selected_x].values.astype(float),name_array[selected_y].values.astype(float), 1)
-                correlation_matrix = np.corrcoef(name_array[selected_x].values.astype(float), name_array[selected_y].values.astype(float))
-                correlation_xy = correlation_matrix[0,1]
-                r_squared = correlation_xy**2
-
-                trace = go.Scatter(x = name_array[selected_x], y = m*name_array[selected_x].values+b,
-                hovertext= "Study: " + name_array.Study 
-                + "<br />Slope: " + str(round(m,2)) 
-                + "<br />Intercept: " + str(round(b,2)) 
-                + "<br />R Squared: " + str(round(r_squared,2)),
-                hoverinfo='text',mode='lines', line={'color' : name_array.Color.values[0]}, 
-                name=i,legendgroup=group_value)
-                
-                data.append(trace)
-            else:
-                continue
-
+        data.append(trace)
+    if selected_x == "zip":
+        typecat = "category"
+    else:
+        typecat = "-"
+        
     return {
         'data': data,
         'layout': go.Layout(
@@ -816,6 +821,7 @@ def update_comp2_2D_graph(selected_x, selected_y, comp, fit, ga, sur, surc, add,
                 "tickfont_size":18,
             },
             xaxis={
+                "type":typecat,
                 "title":selected_x,
                 "titlefont_size":20,
                 "tickfont_size":18
@@ -848,21 +854,20 @@ def update_comp2_2D_graph(selected_x, selected_y, comp, fit, ga, sur, surc, add,
      Input('sconc', 'value'),
      Input('additives', 'value'),
      Input('aconc', 'value'),
-     Input('lp', 'value')],
+     Input('lp', 'value'),
+     Input('pht', 'value')],
 )
-def update_comp2_2D_table(selected_x, selected_y, comp, ga, sur, surc, add, addc, lp):
+def update_comp2_2D_table(selected_x, selected_y, comp, ga, sur, surc, add, addc, lp, pht):
     if comp == "No Compare":
         return "none"
 
-    cl = dv[dv['Gas'].isin(ga)]
-    ea = cl[cl['Surfactant'].isin(sur)]
-    n = ea[ea["Surfactant Concentration"].isin(surc)]
-    e = n[n['Additive'].isin(add)]
-    d = e[e['Additive Concentration'].isin(addc)]
-    cleaned = d[d['LiquidPhase'].isin(lp)]
-
-    cleaned = cleaned[cleaned[selected_x] != "None"]
-    cleaned = cleaned[cleaned[selected_y] != "None"]
+    cl = dv[dv['docket_no'].isin(ga)]
+    ea = cl[cl['case_status'].isin(sur)]
+    n = ea[ea["arresting_officer"].isin(surc)]
+    e = n[n['attorney'].isin(add)]
+    d = e[e['age'].isin(addc)]
+    f = d[d['bail_set_by'].isin(lp)]
+    cleaned = f[f['prelim_hearing_time'].isin(pht)]
 
     final = cleaned.columns
     final = final.drop([selected_x,selected_y])
@@ -872,127 +877,50 @@ def update_comp2_2D_table(selected_x, selected_y, comp, ga, sur, surc, add, addc
         cleaned.to_dict('records'), [{'id': c, 'name': c} for c in cleaned.columns]
     )
 
+
 @app.callback(
     Output("comp1_3D_graph", "figure"),
     [Input("select-xaxis", "value"),
      Input("select-yaxis", "value"),
      Input("select-zaxis", "value"),
      Input('addComp', 'value'),
-     Input("bestfit", "value"),
      Input('gasses', 'value'),
      Input('surfactants', 'value'),
      Input('sconc', 'value'),
      Input('additives', 'value'),
      Input('aconc', 'value'),
-     Input('lp', 'value')],
+     Input('lp', 'value'),
+     Input('pht', 'value')],
 )
-def update_comp1_3D_graph(selected_x, selected_y, selected_z, comp, fit, ga, sur, surc, add, addc, lp):
-    check = 0
-    cl = dv[dv['Gas'].isin(ga)]
-    ea = cl[cl['Surfactant'].isin(sur)]
-    n = ea[ea["Surfactant Concentration"].isin(surc)]
-    e = n[n['Additive'].isin(add)]
-    d = e[e['Additive Concentration'].isin(addc)]
-    cleaned = d[d['LiquidPhase'].isin(lp)]
+def update_comp1_3D_graph(selected_x, selected_y, selected_z, comp, ga, sur, surc, add, addc, lp, pht):
+    cl = dv[dv['docket_no'].isin(ga)]
+    ea = cl[cl['case_status'].isin(sur)]
+    n = ea[ea["arresting_officer"].isin(surc)]
+    e = n[n['attorney'].isin(add)]
+    d = e[e['age'].isin(addc)]
+    f = d[d['bail_set_by'].isin(lp)]
+    cleaned = f[f['prelim_hearing_time'].isin(pht)]
 
     data = []
-    legend_orientation = {}
 
     for i in names:
-        check = 0
-        name_array = cleaned[cleaned.Study == i]
-        for x in name_array[selected_x]:
-            if x == "None":
-                check = 1 
-                break
-        if check == 1:
-            continue
-        for x in name_array[selected_y]:
-            if x == "None":
-                check = 1 
-                break
-        if check == 1:
-            continue
-        for x in name_array[selected_z]:
-            if x == "None":
-                check = 1 
-                break
-        if check == 1:
-            continue
-
-        if len(name_array.Color.values) == 0:
-            group_value = "none"
-        else:
-            group_value = str(name_array.Study.values[0])
+        name_array = cleaned[cleaned.bail_type == i]
         
-        if('Scatter' in fit):
-            trace = go.Scatter3d(x = name_array[selected_x], y = name_array[selected_y], z = name_array[selected_z], 
-            hovertext= "Study: " + name_array.Study 
-            + "<br />Gas: " + name_array.Gas 
-            + "<br />Surfactant: " + name_array.Surfactant 
-            + "<br />Concentration Surfactant: " + name_array["Surfactant Concentration"] 
-            + "<br />Additive: " + name_array.Additive 
-            + "<br />Concentration Additive: " + name_array['Additive Concentration'] 
-            + "<br />Liquid Phase: " + name_array.LiquidPhase,
+        trace = go.Scatter3d(x = name_array[selected_x], y = name_array[selected_y], z = name_array[selected_z], 
+            hovertext= "Docket Number: " + name_array.docket_no
+            + "<br />Case Status: " + name_array.case_status
+            + "<br />Offenses: " + name_array.offenses
+            + "<br />Arresting Officer: " + name_array.arresting_officer + " (arrests: " + dv["arrests"] + ")"
+            + "<br />Attorney: " + name_array.attorney
+            + "<br />Age: " + name_array["age"] 
+            + "<br />Bail Set By: " + name_array.bail_set_by 
+            + "<br />Preliminary Hearing Time: " + name_array.prelim_hearing_time,
             hoverinfo='text',mode='markers', marker={'size': 10, 'opacity': 0.8, 'color' : name_array.Color},
-            name=i,legendgroup=group_value)
+            name=i)
 
-            data.append(trace)
+        data.append(trace)
 
-        if('Best-Fit' in fit):
-            if len(name_array[selected_x].values) != 0 and len(name_array[selected_y].values) != 0 and len(name_array[selected_z].values) != 0: 
-                name_array.sort_values(by=[selected_x], inplace=True)
-
-                x = np.mgrid[min(name_array[selected_x].values.astype(float)):max(name_array[selected_x].values.astype(float)):3j]
-                y = np.mgrid[min(name_array[selected_y].values.astype(float)):max(name_array[selected_y].values.astype(float)):3j]
-                z = np.mgrid[min(name_array[selected_z].values.astype(float)):max(name_array[selected_z].values.astype(float)):3j]
-
-                # this will find the slope and x-intercept of a plane
-                # parallel to the y-axis that best fits the data
-                A_xz = np.vstack((x, np.ones(len(x)))).T
-                m_xz, c_xz = np.linalg.lstsq(A_xz, z)[0]
-
-                # again for a plane parallel to the x-axis
-                A_yz = np.vstack((y, np.ones(len(y)))).T
-                m_yz, c_yz = np.linalg.lstsq(A_yz, z)[0]
-
-                # the intersection of those two planes and
-                # the function for the line would be:
-                # z = m_xz * X + c_xz
-                # z = m_yz * Y + c_yz
-                # or:
-                def lin(z):
-                    x = (z - c_xz)/m_xz
-                    y = (z - c_yz)/m_yz
-                    return x,y
-
-                X,Y = lin(z)
-                Z = z
-
-                # get 2 points on the intersection line 
-                za = z[0]
-                zb = z[len(z) - 1]
-                xa, ya = lin(za)
-                xb, yb = lin(zb)
-
-                # get distance between points
-                length = np.sqrt(pow(xb - xa, 2) + pow(yb - ya, 2) + pow(zb - za, 2))
-
-                # get slopes (projections onto x, y and z planes)
-                sx = (xb - xa) / length  # x slope
-                sy = (yb - ya) / length  # y slope
-                sz = (zb - za) / length  # z slope
-
-                trace = go.Scatter3d(x = X, y = Y, z = Z, 
-                hovertext= "Study: " + name_array.Study 
-                + "<br />d = " + str(round(sx,2)) + "x  + " + str(round(sy,2)) + "y + " + str(round(sz,2)) + "z", 
-                hoverinfo='text',mode='lines', line={'color' : name_array.Color.values[0]},
-                name=i,legendgroup=group_value)
-
-                data.append(trace)
-            else:
-                continue
-
+        
     if(comp == "No Compare"):
         legend_orientation={
                 "font_size": 24,
@@ -1008,11 +936,18 @@ def update_comp1_3D_graph(selected_x, selected_y, selected_z, comp, fit, ga, sur
                 "valign":"middle",
                 "font_size": 20,
         }
+    if selected_x == "zip":
+        typecat = "category"
+    else:
+        typecat = "-"
 
     return {"data": data,
             "layout": go.Layout(
                 hovermode="closest",
                 legend=legend_orientation,
+                xaxis={
+                    "type":typecat
+                },
                 font={
                     "size": 16,
                     "family": "Times New Roman",
@@ -1042,19 +977,17 @@ def update_comp1_3D_graph(selected_x, selected_y, selected_z, comp, fit, ga, sur
      Input('sconc', 'value'),
      Input('additives', 'value'),
      Input('aconc', 'value'),
-     Input('lp', 'value')],
+     Input('lp', 'value'),
+     Input('pht', 'value')],
 )
-def update_comp1_3D_table(selected_x, selected_y,selected_z, ga, sur, surc, add, addc, lp):
-    cl = dv[dv['Gas'].isin(ga)]
-    ea = cl[cl['Surfactant'].isin(sur)]
-    n = ea[ea["Surfactant Concentration"].isin(surc)]
-    e = n[n['Additive'].isin(add)]
-    d = e[e['Additive Concentration'].isin(addc)]
-    cleaned = d[d['LiquidPhase'].isin(lp)]
-
-    cleaned = cleaned[cleaned[selected_x] != "None"]
-    cleaned = cleaned[cleaned[selected_y] != "None"]
-    cleaned = cleaned[cleaned[selected_z] != "None"]
+def update_comp1_3D_table(selected_x, selected_y,selected_z, ga, sur, surc, add, addc, lp, pht):
+    cl = dv[dv['docket_no'].isin(ga)]
+    ea = cl[cl['case_status'].isin(sur)]
+    n = ea[ea["arresting_officer"].isin(surc)]
+    e = n[n['attorney'].isin(add)]
+    d = e[e['age'].isin(addc)]
+    f = d[d['bail_set_by'].isin(lp)]
+    cleaned = f[f['prelim_hearing_time'].isin(pht)]
 
     final = cleaned.columns
     final = final.drop([selected_x,selected_y,selected_z])
@@ -1070,123 +1003,48 @@ def update_comp1_3D_table(selected_x, selected_y,selected_z, ga, sur, surc, add,
      Input("select-yaxis2", "value"),
      Input("select-zaxis2", "value"),
      Input("addComp","value"),
-     Input("bestfit", "value"),
      Input('gasses', 'value'),
      Input('surfactants', 'value'),
      Input('sconc', 'value'),
      Input('additives', 'value'),
      Input('aconc', 'value'),
-     Input('lp', 'value')],
+     Input('lp', 'value'),
+     Input('pht', 'value')],
 )
-def update_comp2_3D_graph(selected_x, selected_y, selected_z, comp, fit, ga, sur, surc, add, addc, lp):
+def update_comp2_3D_graph(selected_x, selected_y, selected_z, comp, ga, sur, surc, add, addc, lp, pht):
     if comp == "No Compare":
         return "none"
 
-    check = 0
-    cl = dv[dv['Gas'].isin(ga)]
-    ea = cl[cl['Surfactant'].isin(sur)]
-    n = ea[ea["Surfactant Concentration"].isin(surc)]
-    e = n[n['Additive'].isin(add)]
-    d = e[e['Additive Concentration'].isin(addc)]
-    cleaned = d[d['LiquidPhase'].isin(lp)]
+    cl = dv[dv['docket_no'].isin(ga)]
+    ea = cl[cl['case_status'].isin(sur)]
+    n = ea[ea["arresting_officer"].isin(surc)]
+    e = n[n['attorney'].isin(add)]
+    d = e[e['age'].isin(addc)]
+    f = d[d['bail_set_by'].isin(lp)]
+    cleaned = f[f['prelim_hearing_time'].isin(pht)]
 
     data = []
 
-    for i in names:
-        check = 0
-        name_array = cleaned[cleaned.Study == i]
-        for x in name_array[selected_x]:
-            if x == "None":
-                check = 1 
-                break
-        if check == 1:
-            continue
-        for x in name_array[selected_y]:
-            if x == "None":
-                check = 1 
-                break
-        if check == 1:
-            continue
-        for x in name_array[selected_z]:
-            if x == "None":
-                check = 1 
-                break
-        if check == 1:
-            continue
-
-        if len(name_array.Color.values) == 0:
-            group_value = "none"
-        else:
-            group_value = str(name_array.Study.values[0])
-
-        if('Scatter' in fit):
-            trace = go.Scatter3d(x = name_array[selected_x], y = name_array[selected_y], z = name_array[selected_z], 
-            hovertext= "Study: " + name_array.Study 
-            + "<br />Gas: " + name_array.Gas 
-            + "<br />Surfactant: " + name_array.Surfactant 
-            + "<br />Concentration Surfactant: " + name_array["Surfactant Concentration"] 
-            + "<br />Additive: " + name_array.Additive 
-            + "<br />Concentration Additive: " + name_array['Additive Concentration'] 
-            + "<br />Liquid Phase: " + name_array.LiquidPhase,
+    for i in names:      
+        name_array = cleaned[cleaned.bail_type == i]  
+        trace = go.Scatter3d(x = name_array[selected_x], y = name_array[selected_y], z = name_array[selected_z], 
+            hovertext= "Docket Number: " + name_array.docket_no
+            + "<br />Case Status: " + name_array.case_status
+            + "<br />Offenses: " + name_array.offenses
+            + "<br />Arresting Officer: " + name_array.arresting_officer + " (arrests: " + dv["arrests"] + ")"
+            + "<br />Attorney: " + name_array.attorney
+            + "<br />Age: " + name_array["age"] 
+            + "<br />Bail Set By: " + name_array.bail_set_by 
+            + "<br />Preliminary Hearing Time: " + name_array.prelim_hearing_time,
             hoverinfo='text',mode='markers', marker={'size': 10, 'opacity': 0.8, 'color' : name_array.Color},
-            name=i,legendgroup=group_value)
+            name=i)
 
-            data.append(trace)
-
-        if('Best-Fit' in fit):
-            if len(name_array[selected_x].values) != 0 and len(name_array[selected_y].values) != 0 and len(name_array[selected_z].values) != 0: 
-                name_array.sort_values(by=[selected_x], inplace=True)
-
-                x = np.mgrid[min(name_array[selected_x].values.astype(float)):max(name_array[selected_x].values.astype(float)):3j]
-                y = np.mgrid[min(name_array[selected_y].values.astype(float)):max(name_array[selected_y].values.astype(float)):3j]
-                z = np.mgrid[min(name_array[selected_z].values.astype(float)):max(name_array[selected_z].values.astype(float)):3j]
-
-                # this will find the slope and x-intercept of a plane
-                # parallel to the y-axis that best fits the data
-                A_xz = np.vstack((x, np.ones(len(x)))).T
-                m_xz, c_xz = np.linalg.lstsq(A_xz, z)[0]
-
-                # again for a plane parallel to the x-axis
-                A_yz = np.vstack((y, np.ones(len(y)))).T
-                m_yz, c_yz = np.linalg.lstsq(A_yz, z)[0]
-
-                # the intersection of those two planes and
-                # the function for the line would be:
-                # z = m_xz * X + c_xz
-                # z = m_yz * Y + c_yz
-                # or:
-                def lin(z):
-                    x = (z - c_xz)/m_xz
-                    y = (z - c_yz)/m_yz
-                    return x,y
-
-                X,Y = lin(z)
-                Z = z
-
-                # get 2 points on the intersection line 
-                za = z[0]
-                zb = z[len(z) - 1]
-                xa, ya = lin(za)
-                xb, yb = lin(zb)
-
-                # get distance between points
-                length = np.sqrt(pow(xb - xa, 2) + pow(yb - ya, 2) + pow(zb - za, 2))
-
-                # get slopes (projections onto x, y and z planes)
-                sx = (xb - xa) / length  # x slope
-                sy = (yb - ya) / length  # y slope
-                sz = (zb - za) / length  # z slope
-
-                trace = go.Scatter3d(x = X, y = Y, z = Z, 
-                hovertext= "Study: " + name_array.Study 
-                + "<br />d = " + str(round(sx,2)) + "x  + " + str(round(sy,2)) + "y + " + str(round(sz,2)) + "z", 
-                hoverinfo='text',mode='lines', line={'color' : name_array.Color.values[0]},
-                name=i,legendgroup=group_value)
-            
-                data.append(trace)
-
-            else:
-                continue
+        data.append(trace)
+    
+    if selected_x == "zip":
+        typecat = "category"
+    else:
+        typecat = "-"
 
     return {"data": data,
             "layout": go.Layout(
@@ -1199,6 +1057,9 @@ def update_comp2_3D_graph(selected_x, selected_y, selected_z, comp, fit, ga, sur
                     "y":1,
                     "valign":"middle",
                     "font_size": 20,
+                },
+                xaxis={
+                    "type":typecat
                 },
                 font={
                     "size": 16,
@@ -1230,22 +1091,20 @@ def update_comp2_3D_graph(selected_x, selected_y, selected_z, comp, fit, ga, sur
      Input('sconc', 'value'),
      Input('additives', 'value'),
      Input('aconc', 'value'),
-     Input('lp', 'value')],
+     Input('lp', 'value'),
+     Input('pht', 'value')],
 )
-def update_comp2_3D_table(selected_x, selected_y,selected_z, comp, ga, sur, surc, add, addc, lp):
+def update_comp2_3D_table(selected_x, selected_y,selected_z, comp, ga, sur, surc, add, addc, lp, pht):
     if comp == "No Compare":
         return "none"
 
-    cl = dv[dv['Gas'].isin(ga)]
-    ea = cl[cl['Surfactant'].isin(sur)]
-    n = ea[ea["Surfactant Concentration"].isin(surc)]
-    e = n[n['Additive'].isin(add)]
-    d = e[e['Additive Concentration'].isin(addc)]
-    cleaned = d[d['LiquidPhase'].isin(lp)]
-
-    cleaned = cleaned[cleaned[selected_x] != "None"]
-    cleaned = cleaned[cleaned[selected_y] != "None"]
-    cleaned = cleaned[cleaned[selected_z] != "None"]
+    cl = dv[dv['docket_no'].isin(ga)]
+    ea = cl[cl['case_status'].isin(sur)]
+    n = ea[ea["arresting_officer"].isin(surc)]
+    e = n[n['attorney'].isin(add)]
+    d = e[e['age'].isin(addc)]
+    f = d[d['bail_set_by'].isin(lp)]
+    cleaned = f[f['prelim_hearing_time'].isin(pht)]
 
     final = cleaned.columns
     final = final.drop([selected_x,selected_y,selected_z])
