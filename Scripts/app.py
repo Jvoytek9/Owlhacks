@@ -22,7 +22,7 @@ data_json = basedir+'/amazing-insight.json'
 creds = ServiceAccountCredentials.from_json_keyfile_name(data_json, scope)
 connection = gspread.authorize(creds)
 
-worksheet = connection.open("Owlhacks").sheet1
+worksheet = connection.open("Owlhacks/Data_Challenge").sheet1
 dv = get_as_dataframe(worksheet)
 dv = dv.loc[:, ~dv.columns.str.contains('^Unnamed')]
 
