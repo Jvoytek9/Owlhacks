@@ -1,6 +1,5 @@
-Features:
---3-D graph
---Comparative 3-D graphs with tables corresponding to data being displayed
---2-D graph
---Table of all compiled data
---Graphs autofilter, displaying only relevant info
+#Owlhacks
+
+A school hackathon. I used the surfactant dashboard I had been crafting during my time researching and manipulated it to work with Philly bailfund data for this hackathon. Overall, a bit buggy since it was a 24hr hackathon. However, this project helped me realize I could port the surfactant dashboard and do more with it, so I made it easier to change datasets come the data challenge.
+
+This is implementation 2/3 of the portable dashboard I had been producing.
